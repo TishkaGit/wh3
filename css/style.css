@@ -389,6 +389,27 @@ body {
     background: var(--bg-secondary);
     color: var(--text-primary);
 }
+/* Принудительное применение темы для модального окна */
+.modal-body[data-theme="light"] {
+    --bg-secondary: #ffffff;
+    --text-primary: #333333;
+    --text-secondary: #555555;
+    --border-color: #dddddd;
+    --input-bg: #ffffff;
+    --table-header-bg: #f8f9fa;
+    background: #ffffff;
+    color: #333333;
+}
+.modal-body[data-theme="dark"] {
+    --bg-secondary: #1a1a1a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #b0b0b0;
+    --border-color: #333333;
+    --input-bg: #0a0a0a;
+    --table-header-bg: #0a0a0a;
+    background: #1a1a1a;
+    color: #e0e0e0;
+}
 .modal-body .form-group {
     margin-bottom: 15px;
 }

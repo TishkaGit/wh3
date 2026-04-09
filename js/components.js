@@ -23,7 +23,7 @@ class Modal {
                         <h3>${content.title || ''}</h3>
                         <button class="modal-close">&times;</button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body" data-theme="${document.body.classList.contains('dark-theme') ? 'dark' : 'light'}">
                         ${content.body || ''}
                     </div>
                 </div>
