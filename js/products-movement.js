@@ -817,12 +817,14 @@ async function handleOutcomeSubmit(e) {
             submitBtn.disabled = true;
             submitBtn.textContent = 'Обработка...';
         }
-        // Создаем отгрузку со статусом 0 (запланировано), сервер сам спишет товары при создании
-        const result = await api.createShipment(shipmentData);
+        // Создаем отгрузку со статусом 0 (запланировано)
+        const shipmentId = await api.createShipment(shipmentData);
+        // Сразу подтверждаем отгрузку (статус 1), что приводит к списанию товаров
+        await api.shipShipment(shipmentId);
         modal.hide();
         await loadProducts();
         await loadShipments();
-        showNotification(`Отгрузка оформлена! ID: ${result}`, 'success');
+        showNotification(`Отгрузка оформлена! ID: ${shipmentId}`, 'success');
     } catch (error) {
         console.error('Create shipment error:', error);
         showNotification(error.message || 'Ошибка при оформлении отгрузки', 'error');
