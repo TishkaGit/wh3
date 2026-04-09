@@ -16,14 +16,15 @@ class Modal {
     }
 
     show(content) {
+        const currentTheme = document.body.classList.contains('dark-theme') ? 'dark' : 'light';
         const modalHtml = `
-            <div class="modal-overlay">
+            <div class="modal-overlay" data-theme="${currentTheme}">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3>${content.title || ''}</h3>
                         <button class="modal-close">&times;</button>
                     </div>
-                    <div class="modal-body" data-theme="${document.body.classList.contains('dark-theme') ? 'dark' : 'light'}">
+                    <div class="modal-body" data-theme="${currentTheme}">
                         ${content.body || ''}
                     </div>
                 </div>
