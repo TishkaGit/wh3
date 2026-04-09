@@ -597,7 +597,12 @@ async function exportContractToPDF(contractId) {
     try {
         const contract = window.currentContractData || await api.getContract(contractId);
         
-        // Используем printContract для открытия печатной версии, затем сохраняем через браузер
+        const provider = contract.provider || {};
+        const statusName = CONFIG.CONTRACT_STATUSES[contract.status]?.name || 'Неизвестно';
+        const productRows = contract.productInfo || [];
+        const total = productRows.reduce((sum, info) => sum + (info.count * info.price), 0).toFixed(2);
+        
+        // Открываем печатную версию и используем сохранение через браузер
         printContract(contractId, true);
         
         showNotification('Используйте "Сохранить как PDF" в диалоге печати', 'info');
@@ -621,13 +626,24 @@ function printContract(contractId, forPdf = false) {
         const productRows = contract.productInfo || [];
         const total = productRows.reduce((sum, info) => sum + (info.count * info.price), 0).toFixed(2);
         
+        // Экранируем специальные символы для HTML
+        function escapeHtml(text) {
+            if (!text) return '-';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+        
         const printWindow = window.open('', '_blank');
-        printWindow.document.write(`<!DOCTYPE html>
+        const htmlContent = `<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Договор №${contract.id}</title>
+    <title>Договор №${escapeHtml(String(contract.id))}</title>
     <style>
         @page { size: A4; margin: 15mm; }
         body { font-family: 'Times New Roman', Times, serif; font-size: 14px; line-height: 1.5; padding: 20mm; max-width: 210mm; margin: 0 auto; background: #fff; color: #000; }
@@ -646,23 +662,23 @@ function printContract(contractId, forPdf = false) {
     </style>
 </head>
 <body>
-    <h1>ДОГОВОР ПОСТАВКИ №${contract.id}</h1>
+    <h1>ДОГОВОР ПОСТАВКИ №${escapeHtml(String(contract.id))}</h1>
     <div class="date">Дата формирования: ${new Date().toLocaleDateString('ru-RU')}</div>
     <h2>ПОСТАВЩИК:</h2>
     <div class="provider-info">
-        <p><strong>Наименование:</strong> ${provider.name || '-'}</p>
-        <p><strong>ИНН:</strong> ${provider.itn || '-'}</p>
-        <p><strong>БИК:</strong> ${provider.bic || '-'}</p>
-        <p><strong>Расчетный счет:</strong> ${provider.settlementAccount || '-'}</p>
-        <p><strong>Директор:</strong> ${provider.directorFullName || '-'}</p>
-        <p><strong>Бухгалтер:</strong> ${provider.accountantFullName || '-'}</p>
+        <p><strong>Наименование:</strong> ${escapeHtml(provider.name)}</p>
+        <p><strong>ИНН:</strong> ${escapeHtml(String(provider.itn || ''))}</p>
+        <p><strong>БИК:</strong> ${escapeHtml(String(provider.bic || ''))}</p>
+        <p><strong>Расчетный счет:</strong> ${escapeHtml(String(provider.settlementAccount || ''))}</p>
+        <p><strong>Директор:</strong> ${escapeHtml(provider.directorFullName)}</p>
+        <p><strong>Бухгалтер:</strong> ${escapeHtml(provider.accountantFullName)}</p>
     </div>
-    <p><strong>Статус договора:</strong> ${statusName}</p>
+    <p><strong>Статус договора:</strong> ${escapeHtml(statusName)}</p>
     <h2>ТОВАРЫ В ДОГОВОРЕ:</h2>
     <table>
         <thead><tr><th>Товар</th><th>Количество</th><th>Цена</th><th>Сумма</th></tr></thead>
         <tbody>
-            ${productRows.map(info => `<tr><td>${info.product?.name || 'Товар #' + info.product}</td><td>${info.count}</td><td>${info.price.toFixed(2)} ₽</td><td>${(info.count * info.price).toFixed(2)} ₽</td></tr>`).join('')}
+            ${productRows.map(info => `<tr><td>${escapeHtml(info.product?.name || 'Товар #' + info.product)}</td><td>${escapeHtml(String(info.count))}</td><td>${(info.price || 0).toFixed(2)} ₽</td><td>${(info.count * (info.price || 0)).toFixed(2)} ₽</td></tr>`).join('')}
         </tbody>
         <tfoot><tr><td colspan="3"><strong>Итого:</strong></td><td><strong>${total} ₽</strong></td></tr></tfoot>
     </table>
@@ -672,7 +688,10 @@ function printContract(contractId, forPdf = false) {
     </div>
     <script>window.onload = function() { ${!forPdf ? 'setTimeout(() => window.print(), 500);' : ''} };<\/script>
 </body>
-</html>`);
+</html>`;
+        
+        printWindow.document.open();
+        printWindow.document.write(htmlContent);
         printWindow.document.close();
     } catch (error) {
         console.error('Print error:', error);
