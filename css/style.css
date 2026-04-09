@@ -108,19 +108,23 @@ body {
 }
 
 .notification-success { 
-    background: var(--success-color);
+    background: #4caf50;
+    color: #ffffff;
     border-left: 4px solid #2e7d32; 
 }
 .notification-error { 
-    background: var(--danger-color);
+    background: #f44336;
+    color: #ffffff;
     border-left: 4px solid #c62828; 
 }
 .notification-info { 
-    background: var(--info-color);
+    background: #2196f3;
+    color: #ffffff;
     border-left: 4px solid #1565c0; 
 }
 .notification-warning { 
-    background: var(--warning-color);
+    background: #ff9800;
+    color: #ffffff;
     border-left: 4px solid #e65100; 
 }
 
