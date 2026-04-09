@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор роли - Aboba Warehouse</title>
+    <link rel="stylesheet" href="css/role-select.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Плавающая кнопка переключения темы -->
+    <button id="themeToggle" class="floating-theme-toggle" title="Переключить тему">🌙</button>
+
+    <div class="role-container">
+        <div class="role-header">
+            <h1>Добро пожаловать в Aboba Warehouse!</h1>
+            <p>Выберите режим работы с системой</p>
+        </div>
+        
+        <div class="role-cards">
+            <div class="role-card" id="managerCard" tabindex="0">
+                <div class="role-icon">👔</div>
+                <h2>Панель менеджера</h2>
+                <p>Полный доступ к управлению складом</p>
+                <span class="role-badge">Административный доступ</span>
+                <ul class="role-features">
+                    <li>Управление поставщиками</li>
+                    <li>Управление товарами</li>
+                    <li>Управление договорами</li>
+                    <li>График поставок</li>
+                </ul>
+            </div>
+            
+            <div class="role-card" id="operatorCard" tabindex="0">
+                <div class="role-icon">📦</div>
+                <h2>Товары и движения</h2>
+                <p>Работа с товарами и складскими операциями</p>
+                <span class="role-badge">Операционный доступ</span>
+                <ul class="role-features">
+                    <li>Просмотр товаров</li>
+                    <li>Приход товара</li>
+                    <li>Расход товара</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="remember-choice">
+            <label>
+                <input type="checkbox" id="rememberRole">
+                Запомнить выбор
+            </label>
+        </div>
+        
+        <button class="continue-button" id="continueBtn" disabled>Продолжить</button>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/role-select.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initThemeToggle();
+        });
+    </script>
+</body>
+</html>
