@@ -232,6 +232,46 @@
     border-color: #4caf50;
 }
 
+.btn-icon.btn-print {
+    border-color: #2196f3;
+    color: #2196f3;
+}
+
+.btn-icon.btn-print:hover {
+    background: #2196f3;
+    color: white;
+}
+
+.btn-icon.btn-pdf {
+    border-color: #f44336;
+    color: #f44336;
+}
+
+.btn-icon.btn-pdf:hover {
+    background: #f44336;
+    color: white;
+}
+
+.btn-print {
+    border-color: #2196f3;
+    color: #2196f3;
+}
+
+.btn-print:hover {
+    background: #2196f3;
+    color: white;
+}
+
+.btn-pdf {
+    border-color: #f44336;
+    color: #f44336;
+}
+
+.btn-pdf:hover {
+    background: #f44336;
+    color: white;
+}
+
 .contract-details {
     padding: 15px;
     background: #0a0a0a;

@@ -545,7 +545,7 @@ function showContractModal(contract) {
                 </p>
                 
                 <h4>Товары в договоре:</h4>
-                <table class="data-table">
+                <table class="data-table" id="contractTable_${contract.id}">
                     <thead>
                         <tr>
                             <th>Товар</th>
@@ -565,6 +565,12 @@ function showContractModal(contract) {
                     </tfoot>
                 </table>
 
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="modal.hide()">Закрыть</button>
+                    <button type="button" class="btn btn-print" onclick="printContract(${contract.id})">🖨️ Печать</button>
+                    <button type="button" class="btn btn-pdf" onclick="exportContractToPDF(${contract.id})">📄 Скачать PDF</button>
+                </div>
+
                 <h4>Изменить статус:</h4>
                 <select id="changeStatusSelect" class="form-control">
                     ${Object.entries(CONFIG.CONTRACT_STATUSES).map(([key, value]) => `
@@ -575,7 +581,7 @@ function showContractModal(contract) {
                 </select>
 
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="modal.hide()">Закрыть</button>
+                    <button type="button" class="btn btn-secondary" onclick="modal.hide()">Отмена</button>
                     <button type="button" class="btn btn-primary" onclick="changeContractStatus(${contract.id})">
                         Изменить статус
                     </button>
@@ -585,6 +591,251 @@ function showContractModal(contract) {
     };
 
     modal.show(modalContent);
+    window.currentContractData = contract;
+}
+
+// Функция экспорта договора в PDF
+async function exportContractToPDF(contractId) {
+    try {
+        const contract = window.currentContractData || await api.getContract(contractId);
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Заголовок
+        doc.setFontSize(18);
+        doc.text(`ДОГОВОР ПОСТАВКИ №${contract.id}`, 105, 20, { align: 'center' });
+        
+        doc.setFontSize(12);
+        doc.text(`Дата формирования: ${new Date().toLocaleDateString('ru-RU')}`, 105, 30, { align: 'center' });
+        
+        // Информация о поставщике
+        doc.setFontSize(14);
+        doc.text('ПОСТАВЩИК:', 14, 45);
+        doc.setFontSize(11);
+        
+        const provider = contract.provider || {};
+        const providerInfo = [
+            [`Наименование:`, provider.name || '-'],
+            [`ИНН:`, provider.itn || '-'],
+            [`БИК:`, provider.bic || '-'],
+            [`Расчетный счет:`, provider.settlementAccount || '-'],
+            [`Директор:`, provider.directorFullName || '-'],
+            [`Бухгалтер:`, provider.accountantFullName || '-']
+        ];
+        
+        doc.autoTable({
+            startY: 50,
+            body: providerInfo,
+            theme: 'plain',
+            columnStyles: {
+                0: { fontStyle: 'bold', cellWidth: 40 },
+                1: { cellWidth: 120 }
+            },
+            margin: { left: 14 }
+        });
+        
+        // Статус договора
+        const statusY = doc.lastAutoTable.finalY + 10;
+        const statusName = CONFIG.CONTRACT_STATUSES[contract.status]?.name || 'Неизвестно';
+        doc.setFontSize(12);
+        doc.text(`Статус договора: ${statusName}`, 14, statusY);
+        
+        // Таблица товаров
+        const tableBody = (contract.productInfo || []).map(info => [
+            info.product?.name || `Товар #${info.product}`,
+            info.count.toString(),
+            `${info.price.toFixed(2)} ₽`,
+            `${(info.count * info.price).toFixed(2)} ₽`
+        ]);
+        
+        const total = contract.productInfo?.reduce((sum, info) => sum + (info.count * info.price), 0).toFixed(2) || 0;
+        
+        doc.autoTable({
+            startY: statusY + 10,
+            head: [['Товар', 'Количество', 'Цена', 'Сумма']],
+            body: tableBody,
+            foot: [['', '', 'Итого:', `${total} ₽`]],
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185] },
+            footStyles: { fillColor: [41, 128, 185], fontStyle: 'bold' },
+            margin: { left: 14, right: 14 }
+        });
+        
+        // Подписи
+        const finalY = doc.lastAutoTable.finalY + 30;
+        doc.setFontSize(11);
+        doc.text('Поставщик: _________________ / _________________', 14, finalY);
+        doc.text('Покупатель: _________________ / _________________', 14, finalY + 10);
+        
+        // Сохранение файла
+        doc.save(`Договор_№${contract.id}_${new Date().toISOString().split('T')[0]}.pdf`);
+        
+        showNotification('Договор успешно экспортирован в PDF', 'success');
+    } catch (error) {
+        console.error('Export to PDF error:', error);
+        showNotification('Ошибка при экспорте в PDF: ' + error.message, 'error');
+    }
+}
+
+// Функция печати договора
+function printContract(contractId) {
+    try {
+        const contract = window.currentContractData;
+        if (!contract) {
+            showNotification('Данные договора не найдены', 'error');
+            return;
+        }
+        
+        const provider = contract.provider || {};
+        const statusName = CONFIG.CONTRACT_STATUSES[contract.status]?.name || 'Неизвестно';
+        const productRows = contract.productInfo || [];
+        const total = productRows.reduce((sum, info) => sum + (info.count * info.price), 0).toFixed(2);
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <title>Договор №${contract.id}</title>
+                <style>
+                    body {
+                        font-family: 'Times New Roman', Times, serif;
+                        font-size: 14px;
+                        line-height: 1.5;
+                        padding: 20mm;
+                        max-width: 210mm;
+                        margin: 0 auto;
+                    }
+                    h1 {
+                        text-align: center;
+                        font-size: 18px;
+                        margin-bottom: 10px;
+                    }
+                    .date {
+                        text-align: center;
+                        margin-bottom: 30px;
+                        color: #666;
+                    }
+                    h2 {
+                        font-size: 14px;
+                        margin-top: 20px;
+                        margin-bottom: 10px;
+                    }
+                    .provider-info {
+                        margin-bottom: 20px;
+                    }
+                    .provider-info p {
+                        margin: 5px 0;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 20px 0;
+                    }
+                    th, td {
+                        border: 1px solid #000;
+                        padding: 8px;
+                        text-align: left;
+                    }
+                    th {
+                        background-color: #f0f0f0;
+                        font-weight: bold;
+                    }
+                    tfoot td {
+                        font-weight: bold;
+                        background-color: #f9f9f9;
+                    }
+                    .signatures {
+                        margin-top: 50px;
+                        display: flex;
+                        justify-content: space-between;
+                    }
+                    .signature-block {
+                        width: 45%;
+                    }
+                    @media print {
+                        body {
+                            padding: 0;
+                        }
+                        .no-print {
+                            display: none;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>ДОГОВОР ПОСТАВКИ №${contract.id}</h1>
+                <div class="date">Дата формирования: ${new Date().toLocaleDateString('ru-RU')}</div>
+                
+                <h2>ПОСТАВЩИК:</h2>
+                <div class="provider-info">
+                    <p><strong>Наименование:</strong> ${provider.name || '-'}</p>
+                    <p><strong>ИНН:</strong> ${provider.itn || '-'}</p>
+                    <p><strong>БИК:</strong> ${provider.bic || '-'}</p>
+                    <p><strong>Расчетный счет:</strong> ${provider.settlementAccount || '-'}</p>
+                    <p><strong>Директор:</strong> ${provider.directorFullName || '-'}</p>
+                    <p><strong>Бухгалтер:</strong> ${provider.accountantFullName || '-'}</p>
+                </div>
+                
+                <p><strong>Статус договора:</strong> ${statusName}</p>
+                
+                <h2>ТОВАРЫ В ДОГОВОРЕ:</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Товар</th>
+                            <th>Количество</th>
+                            <th>Цена</th>
+                            <th>Сумма</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${productRows.map(info => `
+                            <tr>
+                                <td>${info.product?.name || `Товар #${info.product}`}</td>
+                                <td>${info.count}</td>
+                                <td>${info.price.toFixed(2)} ₽</td>
+                                <td>${(info.count * info.price).toFixed(2)} ₽</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3"><strong>Итого:</strong></td>
+                            <td><strong>${total} ₽</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <div class="signatures">
+                    <div class="signature-block">
+                        <p>Поставщик:</p>
+                        <p>_________________ / _________________</p>
+                    </div>
+                    <div class="signature-block">
+                        <p>Покупатель:</p>
+                        <p>_________________ / _________________</p>
+                    </div>
+                </div>
+                
+                <button class="no-print" onclick="window.print()" style="position: fixed; top: 10px; right: 10px; padding: 10px 20px; cursor: pointer;">🖨️ Печать</button>
+                <button class="no-print" onclick="window.close()" style="position: fixed; top: 10px; right: 120px; padding: 10px 20px; cursor: pointer;">✕ Закрыть</button>
+                
+                <script>
+                    window.onload = function() {
+                        window.print();
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    } catch (error) {
+        console.error('Print error:', error);
+        showNotification('Ошибка при печати: ' + error.message, 'error');
+    }
 }
 
 async function changeContractStatus(id) {
@@ -964,3 +1215,5 @@ window.addScheduleRowForProduct = addScheduleRowForProduct;
 window.removeScheduleRow = removeScheduleRow;
 window.toggleSelectAllSchedule = toggleSelectAllSchedule;
 window.openContractFromSchedule = openContractFromSchedule;
+window.exportContractToPDF = exportContractToPDF;
+window.printContract = printContract;
