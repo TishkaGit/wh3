@@ -617,7 +617,7 @@ async function exportContractToPDF(contractId) {
         }
         
         // Создаем PDF с помощью jsPDF
-        const { jsPDF } = window.jspdf;
+        const jsPDF = window.jspdf.jsPDF;
         const doc = new jsPDF();
         
         // Заголовок

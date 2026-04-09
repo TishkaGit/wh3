@@ -4,6 +4,7 @@
 let products = [];
 let deliverySchedule = [];
 let receiptOrders = [];
+let shipments = [];
 let providers = []; // кэш поставщиков
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -68,6 +69,8 @@ function setupTabs() {
                 loadDeliverySchedule();
             } else if (tabId === 'receipts') {
                 loadReceiptOrders();
+            } else if (tabId === 'shipments') {
+                loadShipments();
             }
         });
     });
@@ -836,6 +839,180 @@ function openIncomeModal() {
     openReceiptModal();
 }
 
+// ==================== Отгрузки ====================
+async function loadShipments() {
+    try {
+        shipments = await api.getShipments();
+        renderShipmentsTable();
+    } catch (error) {
+        const tbody = document.getElementById('shipmentsTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" class="error">Ошибка загрузки</td></tr>';
+        }
+        console.error('Load shipments error:', error);
+    }
+}
+
+function renderShipmentsTable() {
+    const tbody = document.getElementById('shipmentsTableBody');
+    if (!tbody) return;
+    
+    if (!shipments.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">Нет данных</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = shipments.map(shipment => {
+        const statusInfo = CONFIG.SHIPMENT_STATUSES[shipment.status] || { name: 'Неизвестно', class: 'unknown' };
+        const timeStr = shipment.time ? new Date(shipment.time).toLocaleString('ru-RU') : '-';
+        
+        let rowsHtml = '';
+        if (shipment.productInfo && shipment.productInfo.length > 0) {
+            rowsHtml = shipment.productInfo.map((info, idx) => {
+                const sum = (info.count * (info.price || 0)).toFixed(2);
+                return `
+                    <tr>
+                        ${idx === 0 ? `<td rowspan="${shipment.productInfo.length}">${shipment.id}</td>` : ''}
+                        ${idx === 0 ? `<td rowspan="${shipment.productInfo.length}">${timeStr}</td>` : ''}
+                        <td>${info.product?.name || 'Товар #' + info.product}</td>
+                        <td>${info.count}</td>
+                        <td>${(info.price || 0).toFixed(2)}</td>
+                        <td>${sum}</td>
+                        ${idx === 0 ? `<td rowspan="${shipment.productInfo.length}"><span class="status-badge status-${statusInfo.class}">${statusInfo.name}</span></td>` : ''}
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            rowsHtml = `<tr><td>${shipment.id}</td><td>${timeStr}</td><td colspan="4" class="loading">Нет товаров</td><td><span class="status-badge status-${statusInfo.class}">${statusInfo.name}</span></td></tr>`;
+        }
+        
+        return rowsHtml;
+    }).join('');
+}
+
+function showAddShipmentModal() {
+    if (!products || products.length === 0) {
+        loadProducts().then(() => showAddShipmentModal());
+        return;
+    }
+    
+    const productOptions = products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    
+    const modalContent = {
+        title: 'Добавление отгрузки',
+        body: `
+            <form id="addShipmentForm">
+                <div id="shipmentProductsContainer"></div>
+                
+                <button type="button" class="btn btn-secondary" onclick="addShipmentProductRow()" style="margin-bottom: 15px;">
+                    ➕ Добавить товар
+                </button>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">🚚 Создать отгрузку</button>
+                </div>
+            </form>
+        `
+    };
+    
+    modal.show(modalContent);
+    window.shipmentProductCounter = 0;
+    addShipmentProductRow();
+    
+    document.getElementById('addShipmentForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const productRows = document.querySelectorAll('.shipment-product-row');
+        const shipmentData = [];
+        
+        productRows.forEach(row => {
+            const productId = row.querySelector('.shipment-product-select').value;
+            const count = parseInt(row.querySelector('.shipment-count').value);
+            const price = parseFloat(row.querySelector('.shipment-price').value);
+            
+            if (productId && count > 0 && price >= 0) {
+                shipmentData.push({
+                    product: parseInt(productId),
+                    count: count,
+                    price: price
+                });
+            }
+        });
+        
+        if (shipmentData.length === 0) {
+            showNotification('Добавьте хотя бы один товар', 'error');
+            return;
+        }
+        
+        try {
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Создание...';
+            }
+            
+            const id = await api.createShipment(shipmentData);
+            modal.hide();
+            await loadShipments();
+            showNotification(`Отгрузка создана с ID: ${id}`, 'success');
+        } catch (error) {
+            showNotification(error.message, 'error');
+        }
+    });
+}
+
+function addShipmentProductRow() {
+    const container = document.getElementById('shipmentProductsContainer');
+    if (!container) return;
+    
+    const productId = `shipment_product_${window.shipmentProductCounter++}`;
+    const productOptions = products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    
+    const productHtml = `
+        <div class="product-item shipment-product-row" id="${productId}" style="margin-bottom: 15px; padding: 15px; background: var(--bg-tertiary); border-radius: 5px;">
+            <div class="form-row">
+                <div class="form-group" style="flex: 2;">
+                    <label>Товар *</label>
+                    <select class="shipment-product-select" required>
+                        <option value="">Выберите товар</option>
+                        ${productOptions}
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Количество *</label>
+                    <input type="number" class="shipment-count" min="1" required>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Цена *</label>
+                    <input type="number" step="0.01" class="shipment-price" min="0" required>
+                </div>
+                <div class="form-group" style="flex: 0 0 50px; align-self: flex-end;">
+                    <button type="button" class="remove-btn" onclick="removeShipmentProductRow('${productId}')" style="width: 100%; height: 40px;">×</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', productHtml);
+}
+
+function removeShipmentProductRow(id) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.remove();
+    }
+}
+
+async function shipShipment(id) {
+    try {
+        await api.shipShipment(id);
+        await loadShipments();
+        showNotification('Отгрузка подтверждена', 'success');
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
 // Глобальные функции
 window.openOutcomeModal = openOutcomeModal;
 window.loadDeliverySchedule = loadDeliverySchedule;
@@ -849,3 +1026,9 @@ window.onOutcomeProductSelect = onOutcomeProductSelect;
 window.loadReceiptOrders = loadReceiptOrders;
 window.viewReceiptOrder = viewReceiptOrder;
 window.openContractFromReceipt = openContractFromReceipt;
+window.loadShipments = loadShipments;
+window.renderShipmentsTable = renderShipmentsTable;
+window.showAddShipmentModal = showAddShipmentModal;
+window.shipShipment = shipShipment;
+window.addShipmentProductRow = addShipmentProductRow;
+window.removeShipmentProductRow = removeShipmentProductRow;

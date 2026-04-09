@@ -27,7 +27,6 @@
             <button class="tab-btn" data-tab="products">📦 Товары</button>
             <button class="tab-btn" data-tab="contracts">📄 Договоры</button>
             <button class="tab-btn" data-tab="schedule">📅 График поставок</button>
-            <button class="tab-btn" data-tab="shipments">🚚 Отгрузки</button>
         </div>
 
         <div id="providersTab" class="tab-content active">
@@ -140,31 +139,6 @@
                     </thead>
                     <tbody id="scheduleTableBody">
                         <tr><td colspan="6" class="loading">Загрузка...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="shipmentsTab" class="tab-content">
-            <div class="tab-header">
-                <h2>🚚 Отгрузки товаров</h2>
-                <button class="btn btn-primary" onclick="showAddShipmentModal()">➕ Добавить отгрузку</button>
-            </div>
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Время</th>
-                            <th>Товар</th>
-                            <th>Количество</th>
-                            <th>Цена</th>
-                            <th>Сумма</th>
-                            <th>Статус</th>
-                        </tr>
-                    </thead>
-                    <tbody id="shipmentsTableBody">
-                        <tr><td colspan="7" class="loading">Загрузка...</td></tr>
                     </tbody>
                 </table>
             </div>
