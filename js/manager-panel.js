@@ -6,6 +6,7 @@ let products = [];
 let units = [];
 let contracts = [];
 let deliverySchedule = [];
+let shipments = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     if (!authService.isAuthenticated()) {
@@ -48,6 +49,8 @@ function setupTabs() {
             
             if (tabId === 'schedule') {
                 loadDeliverySchedule();
+            } else if (tabId === 'shipments') {
+                loadShipments();
             }
         });
     });
@@ -602,10 +605,81 @@ async function exportContractToPDF(contractId) {
         const productRows = contract.productInfo || [];
         const total = productRows.reduce((sum, info) => sum + (info.count * info.price), 0).toFixed(2);
         
-        // Открываем печатную версию и используем сохранение через браузер
-        printContract(contractId, true);
+        // Экранируем специальные символы для HTML
+        function escapeHtml(text) {
+            if (!text) return '-';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
         
-        showNotification('Используйте "Сохранить как PDF" в диалоге печати', 'info');
+        // Создаем PDF с помощью jsPDF
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Заголовок
+        doc.setFontSize(16);
+        doc.text(`ДОГОВОР ПОСТАВКИ №${contract.id}`, 105, 20, { align: 'center' });
+        
+        // Дата формирования
+        doc.setFontSize(10);
+        doc.text(`Дата формирования: ${new Date().toLocaleDateString('ru-RU')}`, 105, 30, { align: 'center' });
+        
+        // Поставщик
+        doc.setFontSize(12);
+        doc.text('ПОСТАВЩИК:', 20, 45);
+        doc.setFontSize(10);
+        let y = 55;
+        doc.text(`Наименование: ${provider.name || '-'}`, 20, y); y += 7;
+        doc.text(`ИНН: ${provider.itn || '-'}`, 20, y); y += 7;
+        doc.text(`БИК: ${provider.bic || '-'}`, 20, y); y += 7;
+        doc.text(`Расчетный счет: ${provider.settlementAccount || '-'}`, 20, y); y += 7;
+        doc.text(`Директор: ${provider.directorFullName || '-'}`, 20, y); y += 7;
+        doc.text(`Бухгалтер: ${provider.accountantFullName || '-'}`, 20, y); y += 7;
+        
+        // Статус
+        y += 5;
+        doc.setFontSize(10);
+        doc.text(`Статус договора: ${statusName}`, 20, y); y += 10;
+        
+        // Таблица товаров
+        doc.setFontSize(12);
+        doc.text('ТОВАРЫ В ДОГОВОРЕ:', 20, y); y += 8;
+        
+        const tableBody = productRows.map(info => [
+            info.product?.name || `Товар #${info.product}`,
+            info.count.toString(),
+            `${(info.price || 0).toFixed(2)} ₽`,
+            `${(info.count * (info.price || 0)).toFixed(2)} ₽`
+        ]);
+        
+        doc.autoTable({
+            startY: y,
+            head: [['Товар', 'Количество', 'Цена', 'Сумма']],
+            body: tableBody,
+            foot: [['', '', 'Итого:', `${total} ₽`]],
+            theme: 'grid',
+            headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0] },
+            footStyles: { fillColor: [249, 249, 249], textColor: [0, 0, 0], fontStyle: 'bold' },
+            margin: { left: 20, right: 20 }
+        });
+        
+        // Подписи
+        const finalY = doc.lastAutoTable.finalY + 30;
+        doc.setFontSize(10);
+        doc.text('Поставщик:', 20, finalY);
+        doc.text('_________________ / _________________', 20, finalY + 7);
+        
+        doc.text('Покупатель:', 120, finalY);
+        doc.text('_________________ / _________________', 120, finalY + 7);
+        
+        // Сохраняем файл
+        doc.save(`Договор_${contract.id}.pdf`);
+        
+        showNotification('PDF успешно создан и скачан', 'success');
     } catch (error) {
         console.error('Export to PDF error:', error);
         showNotification('Ошибка при экспорте в PDF: ' + error.message, 'error');
@@ -1078,3 +1152,181 @@ window.toggleSelectAllSchedule = toggleSelectAllSchedule;
 window.openContractFromSchedule = openContractFromSchedule;
 window.exportContractToPDF = exportContractToPDF;
 window.printContract = printContract;
+window.loadShipments = loadShipments;
+window.renderShipmentsTable = renderShipmentsTable;
+window.showAddShipmentModal = showAddShipmentModal;
+window.shipShipment = shipShipment;
+
+// ==================== Отгрузки ====================
+async function loadShipments() {
+    try {
+        shipments = await api.getShipments();
+        renderShipmentsTable();
+    } catch (error) {
+        const tbody = document.getElementById('shipmentsTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" class="error">Ошибка загрузки</td></tr>';
+        }
+        console.error('Load shipments error:', error);
+    }
+}
+
+function renderShipmentsTable() {
+    const tbody = document.getElementById('shipmentsTableBody');
+    if (!tbody) return;
+    
+    if (!shipments.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">Нет данных</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = shipments.map(shipment => {
+        const statusInfo = CONFIG.SHIPMENT_STATUSES[shipment.status] || { name: 'Неизвестно', class: 'unknown' };
+        const timeStr = shipment.time ? new Date(shipment.time).toLocaleString('ru-RU') : '-';
+        
+        let rowsHtml = '';
+        if (shipment.productInfo && shipment.productInfo.length > 0) {
+            rowsHtml = shipment.productInfo.map((info, idx) => {
+                const sum = (info.count * (info.price || 0)).toFixed(2);
+                return `
+                    <tr>
+                        ${idx === 0 ? `<td rowspan="${shipment.productInfo.length}">${shipment.id}</td>` : ''}
+                        ${idx === 0 ? `<td rowspan="${shipment.productInfo.length}">${timeStr}</td>` : ''}
+                        <td>${info.product?.name || 'Товар #' + info.product}</td>
+                        <td>${info.count}</td>
+                        <td>${(info.price || 0).toFixed(2)}</td>
+                        <td>${sum}</td>
+                        ${idx === 0 ? `<td rowspan="${shipment.productInfo.length}"><span class="status-badge status-${statusInfo.class}">${statusInfo.name}</span></td>` : ''}
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            rowsHtml = `<tr><td>${shipment.id}</td><td>${timeStr}</td><td colspan="4" class="loading">Нет товаров</td><td><span class="status-badge status-${statusInfo.class}">${statusInfo.name}</span></td></tr>`;
+        }
+        
+        return rowsHtml;
+    }).join('');
+}
+
+function showAddShipmentModal() {
+    if (!products || products.length === 0) {
+        loadProducts().then(() => showAddShipmentModal());
+        return;
+    }
+    
+    const productOptions = products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    
+    const modalContent = {
+        title: 'Добавление отгрузки',
+        body: `
+            <form id="addShipmentForm">
+                <div id="shipmentProductsContainer"></div>
+                
+                <button type="button" class="btn btn-secondary" onclick="addShipmentProductRow()" style="margin-bottom: 15px;">
+                    ➕ Добавить товар
+                </button>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">🚚 Создать отгрузку</button>
+                </div>
+            </form>
+        `
+    };
+    
+    modal.show(modalContent);
+    window.shipmentProductCounter = 0;
+    addShipmentProductRow();
+    
+    document.getElementById('addShipmentForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const productRows = document.querySelectorAll('.shipment-product-row');
+        const shipmentData = [];
+        
+        productRows.forEach(row => {
+            const productId = row.querySelector('.shipment-product-select').value;
+            const count = parseInt(row.querySelector('.shipment-count').value);
+            const price = parseFloat(row.querySelector('.shipment-price').value);
+            
+            if (productId && count > 0 && price >= 0) {
+                shipmentData.push({
+                    product: parseInt(productId),
+                    count: count,
+                    price: price
+                });
+            }
+        });
+        
+        if (shipmentData.length === 0) {
+            showNotification('Добавьте хотя бы один товар', 'error');
+            return;
+        }
+        
+        try {
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Создание...';
+            }
+            
+            const id = await api.createShipment(shipmentData);
+            modal.hide();
+            await loadShipments();
+            showNotification(`Отгрузка создана с ID: ${id}`, 'success');
+        } catch (error) {
+            showNotification(error.message, 'error');
+        }
+    });
+}
+
+function addShipmentProductRow() {
+    const container = document.getElementById('shipmentProductsContainer');
+    if (!container) return;
+    
+    const productId = `shipment_product_${window.shipmentProductCounter++}`;
+    const productOptions = products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    
+    const productHtml = `
+        <div class="product-item shipment-product-row" id="${productId}" style="margin-bottom: 15px; padding: 15px; background: var(--bg-tertiary); border-radius: 5px;">
+            <div class="form-row">
+                <div class="form-group" style="flex: 2;">
+                    <label>Товар *</label>
+                    <select class="shipment-product-select" required>
+                        <option value="">Выберите товар</option>
+                        ${productOptions}
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Количество *</label>
+                    <input type="number" class="shipment-count" min="1" required>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Цена *</label>
+                    <input type="number" step="0.01" class="shipment-price" min="0" required>
+                </div>
+                <div class="form-group" style="flex: 0 0 50px; align-self: flex-end;">
+                    <button type="button" class="remove-btn" onclick="removeShipmentProductRow('${productId}')" style="width: 100%; height: 40px;">×</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', productHtml);
+}
+
+function removeShipmentProductRow(id) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.remove();
+    }
+}
+
+async function shipShipment(id) {
+    try {
+        await api.shipShipment(id);
+        await loadShipments();
+        showNotification('Отгрузка подтверждена', 'success');
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
