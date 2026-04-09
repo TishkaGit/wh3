@@ -143,22 +143,23 @@ function renderProductsTable(productsToShow) {
     const tbody = document.getElementById('productsTableBody');
     
     if (!productsToShow || !productsToShow.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="loading">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="loading">Нет данных</td></tr>';
         return;
     }
 
     tbody.innerHTML = productsToShow.map(product => {
-        const isCritical = product.criticalBalance > 0;
+        const balance = product.balance !== undefined ? product.balance : 0;
+        const criticalBalance = product.criticalBalance || 0;
+        const isCritical = balance <= criticalBalance;
+        const unitName = product.unit?.name || 'шт.';
+        
         return `
             <tr class="${isCritical ? 'critical' : ''}">
                 <td>${product.id}</td>
                 <td>${product.name}</td>
-                <td><span class="unit-badge">${product.unit?.name || '-'}</span></td>
-                <td>
-                    <span class="status-badge status-${isCritical ? 'warning' : 'normal'}">
-                        ${isCritical ? '⚠️ Критический' : '✅ Норма'}
-                    </span>
-                </td>
+                <td><span class="unit-badge">${unitName}</span></td>
+                <td>${criticalBalance}</td>
+                <td class="${isCritical ? 'critical-balance' : ''}">${balance}</td>
             </tr>
         `;
     }).join('');
@@ -809,9 +810,22 @@ async function handleOutcomeSubmit(e) {
             submitBtn.disabled = true;
             submitBtn.textContent = 'Обработка...';
         }
-        const result = await api.createShipment(shipmentData);
+        
+        // Формируем данные с price=0 для API
+        const shipmentDataWithPrice = shipmentData.map(item => ({
+            product: item.product,
+            count: item.count,
+            price: 0
+        }));
+        
+        const result = await api.createShipment(shipmentDataWithPrice);
+        
+        // Сразу подтверждаем отгрузку
+        await api.shipShipment(result);
+        
         modal.hide();
         await loadProducts();
+        await loadShipments();
         showNotification(`Отгрузка оформлена! ID: ${result}`, 'success');
     } catch (error) {
         console.error('Create shipment error:', error);
@@ -952,9 +966,14 @@ function showAddShipmentModal() {
             }
             
             const id = await api.createShipment(shipmentData);
+            
+            // Сразу подтверждаем отгрузку после создания
+            await api.shipShipment(id);
+            
             modal.hide();
             await loadShipments();
-            showNotification(`Отгрузка создана с ID: ${id}`, 'success');
+            await loadProducts(); // Обновляем товары для обновления остатков
+            showNotification(`Отгрузка создана с ID: ${id} и подтверждена`, 'success');
         } catch (error) {
             showNotification(error.message, 'error');
         }

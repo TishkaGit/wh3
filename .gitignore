@@ -1,1 +1,1 @@
-Nothing should be ignored based on the provided file changes. The modification of 'js/manager-panel.js' is a source code file that should not be added to .gitignore.
+(css/products-movement.css, js/products-movement.js, products-movement.html are source files, no build artifacts or dependencies detected)
