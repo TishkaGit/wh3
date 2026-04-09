@@ -1269,10 +1269,16 @@ function showAddShipmentModal() {
                 submitBtn.textContent = 'Создание...';
             }
             
+            // 1. Создаем отгрузку (статус "запланировано")
             const id = await api.createShipment(shipmentData);
+            
+            // 2. Фиксируем отгрузку (меняем статус на "отгружено", списываем товар)
+            await api.shipShipment(id);
+            
             modal.hide();
             await loadShipments();
-            showNotification(`Отгрузка создана с ID: ${id}`, 'success');
+            await loadProducts(); // Обновляем остатки на складе
+            showNotification('Отгрузка успешно создана и проведена', 'success');
         } catch (error) {
             showNotification(error.message, 'error');
         }
