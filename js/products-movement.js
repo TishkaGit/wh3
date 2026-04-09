@@ -129,13 +129,21 @@ async function loadProducts(search = '', filter = 'all') {
         }
         
         if (filter === 'critical') {
-            filteredProducts = filteredProducts.filter(p => p.criticalBalance > 0);
+            filteredProducts = filteredProducts.filter(p => {
+                const currentBalance = p.currentBalance ?? 0;
+                const criticalBalance = p.criticalBalance ?? 0;
+                return currentBalance <= criticalBalance;
+            });
+        } else if (filter === 'in-stock') {
+            filteredProducts = filteredProducts.filter(p => (p.currentBalance ?? 0) > 0);
+        } else if (filter === 'out-of-stock') {
+            filteredProducts = filteredProducts.filter(p => (p.currentBalance ?? 0) === 0);
         }
         
         renderProductsTable(filteredProducts);
     } catch (error) {
         document.getElementById('productsTableBody').innerHTML = 
-            '<tr><td colspan="4" class="error">Ошибка загрузки</td></tr>';
+            '<tr><td colspan="5" class="error">Ошибка загрузки</td></tr>';
     }
 }
 
@@ -148,18 +156,17 @@ function renderProductsTable(productsToShow) {
     }
 
     tbody.innerHTML = productsToShow.map(product => {
-        const balance = product.balance !== undefined ? product.balance : 0;
-        const criticalBalance = product.criticalBalance || 0;
-        const isCritical = balance <= criticalBalance;
-        const unitName = product.unit?.name || 'шт.';
+        const currentBalance = product.currentBalance ?? 0;
+        const criticalBalance = product.criticalBalance ?? 0;
+        const isLowStock = currentBalance <= criticalBalance;
         
         return `
-            <tr class="${isCritical ? 'critical' : ''}">
+            <tr class="${isLowStock ? 'critical' : ''}">
                 <td>${product.id}</td>
                 <td>${product.name}</td>
-                <td><span class="unit-badge">${unitName}</span></td>
+                <td><span class="unit-badge">${product.unit?.name || '-'}</span></td>
                 <td>${criticalBalance}</td>
-                <td class="${isCritical ? 'critical-balance' : ''}">${balance}</td>
+                <td style="${isLowStock ? 'color: #ef4444; font-weight: bold;' : ''}">${currentBalance}</td>
             </tr>
         `;
     }).join('');
@@ -810,19 +817,8 @@ async function handleOutcomeSubmit(e) {
             submitBtn.disabled = true;
             submitBtn.textContent = 'Обработка...';
         }
-        
-        // Формируем данные с price=0 для API
-        const shipmentDataWithPrice = shipmentData.map(item => ({
-            product: item.product,
-            count: item.count,
-            price: 0
-        }));
-        
-        const result = await api.createShipment(shipmentDataWithPrice);
-        
-        // Сразу подтверждаем отгрузку
-        await api.shipShipment(result);
-        
+        // Создаем отгрузку со статусом 0 (запланировано), сервер сам спишет товары при создании
+        const result = await api.createShipment(shipmentData);
         modal.hide();
         await loadProducts();
         await loadShipments();
@@ -966,14 +962,9 @@ function showAddShipmentModal() {
             }
             
             const id = await api.createShipment(shipmentData);
-            
-            // Сразу подтверждаем отгрузку после создания
-            await api.shipShipment(id);
-            
             modal.hide();
             await loadShipments();
-            await loadProducts(); // Обновляем товары для обновления остатков
-            showNotification(`Отгрузка создана с ID: ${id} и подтверждена`, 'success');
+            showNotification(`Отгрузка создана с ID: ${id}`, 'success');
         } catch (error) {
             showNotification(error.message, 'error');
         }

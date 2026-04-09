@@ -252,16 +252,6 @@
     background: #3d3d2e;
 }
 
-.products-table .critical-balance {
-    color: #f44336;
-    font-weight: 700;
-}
-
-/* Для светлой темы */
-body:not(.dark-theme) .products-table .critical-balance {
-    color: #d32f2f;
-}
-
 @keyframes pulse {
     0% {
         background: #2e2e1a;
